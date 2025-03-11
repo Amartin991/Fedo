@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Update the system
+sudo dnf update -y
+
+# Install XFCE (change to LXQt, MATE, etc. if preferred)
+sudo dnf groupinstall -y "Xfce Desktop"
+
+# Install dependencies for RealVNC
+sudo dnf install -y tigervnc-server xsetroot dbus-x11 xorg-x11-xauth
+
+# Download and install RealVNC
+wget https://www.realvnc.com/download/file/viewer.files/VNC-Viewer-7.9.0-Linux-x86_64.rpm -O vncviewer.rpm
+sudo dnf install -y ./vncviewer.rpm
+rm vncviewer.rpm
+
+# Create a VNC user and set up a password
+echo "Setting up VNC user and password..."
+vncpasswd
+
+# Create the VNC server configuration
+mkdir -p ~/.vnc
+cat <<EOL > ~/.vnc/xstartup
+#!/bin/bash
+xrdb $HOME/.Xresources
+startxfce4 &
+EOL
+chmod +x ~/.vnc/xstartup
+
+# Set up the VNC service
+cat <<EOL | sudo tee /etc/systemd/system/vncserver@.service
+[Unit]
+Description=Remote desktop service (VNC)
+After=syslog.target network.target
+
+[Service]
+Type=simple
+User=$USER
+PAMName=login
+PIDFile=/home/$USER/.vnc/%H:%i.pid
+ExecStartPre=-/usr/bin/vncserver -kill :%i > /dev/null 2>&1
+ExecStart=/usr/bin/vncserver :%i -localhost no -geometry 1280x720 -depth 24
+ExecStop=/usr/bin/vncserver -kill :%i
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+# Reload systemd, enable, and start VNC on boot
+sudo systemctl daemon-reload
+sudo systemctl enable vncserver@1.service
+sudo systemctl start vncserver@1.service
+
+# Allow VNC through the firewall
+sudo firewall-cmd --permanent --add-port=5901/tcp
+sudo firewall-cmd --reload
+
+echo "✅ VNC setup complete! You can now connect using RealVNC Viewer."
+echo "🔗 Use: <server-ip>:1 to connect."
