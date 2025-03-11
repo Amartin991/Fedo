@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Update system
+sudo dnf update -y
+
+# Install essential tools
+sudo dnf install -y curl wget nano git unzip
+
+# Install Podman (better than Docker for Fedora)
+sudo dnf install -y podman podman-compose
+
+# Enable Podman socket for Docker compatibility
+sudo systemctl enable --now podman.socket
+
+# Install KVM/QEMU for virtualization
+sudo dnf install -y @virtualization
+sudo systemctl enable --now libvirtd
+sudo usermod -aG libvirt $(whoami)
+
+# Install Btrfs (Recommended for Fedora)
+sudo dnf install -y btrfs-progs
+
+# Install NFS Server
+sudo dnf install -y nfs-utils
+sudo systemctl enable --now nfs-server
+
+# Configure NFS export directory
+sudo mkdir -p /mnt/shared
+sudo chmod 777 /mnt/shared
+echo "/mnt/shared *(rw,sync,no_root_squash,no_subtree_check)" | sudo tee -a /etc/exports
+sudo exportfs -ra
+
+# Install Samba for Windows/Linux file sharing
+sudo dnf install -y samba
+sudo systemctl enable --now smb
+sudo systemctl enable --now nmb
+
+# Create Samba share
+sudo mkdir -p /mnt/samba
+sudo chmod 777 /mnt/samba
+echo -e "[sambashare]\n   path = /mnt/samba\n   read only = no\n   browsable = yes\n   guest ok = yes" | sudo tee -a /etc/samba/smb.conf
+sudo systemctl restart smb nmb
+
+# Install Jellyfin for media streaming
+sudo dnf install -y epel-release
+sudo dnf install -y https://repo.jellyfin.org/releases/server/fedora/stable/server/jellyfin-server.rpm
+sudo systemctl enable --now jellyfin
+
+# Install Sunshine for game streaming
+sudo dnf install -y sunshine
+
+# Enable firewall rules for services
+sudo firewall-cmd --permanent --add-service=nfs
+sudo firewall-cmd --permanent --add-service=samba
+sudo firewall-cmd --permanent --add-port=8096/tcp  # Jellyfin
+sudo firewall-cmd --permanent --add-port=47984/udp # Sunshine
+sudo firewall-cmd --reload
+
+echo "✅ Fedora Server setup complete!"
